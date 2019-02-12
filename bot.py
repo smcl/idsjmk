@@ -3,10 +3,15 @@ import json
 import math
 import os
 import time
+import tweepy
 import urllib.request
 from PIL import Image, ImageDraw, ImageEnhance
 
-image_size = 400
+image_size = 600
+consumer_key = ""
+consumer_secret = ""
+access_token = ""
+access_secret = ""
 
 class Vehicle(object):  
     def __init__(self, vehicle_json):
@@ -50,6 +55,15 @@ def vehicle_color(vehicle):
     
     return delay_colors[vehicle.Delay]
 
+def splodge(draw, x, y, eX=3, eY=3, fill="white"):
+    bbox =  (
+        x - eX/2, 
+        y - eY/2, 
+        x + eX/2, 
+        y + eY/2
+    )
+    draw.ellipse(bbox, fill=fill)
+
 def create_image(base_img, response_json):
     vehicles = parse_response(response_json)
 
@@ -60,7 +74,7 @@ def create_image(base_img, response_json):
 
     # fill in vehicle colours based on how delayed they are
     for vehicle in vehicles:
-        draw.point( [ vehicle.x, vehicle.y], fill=vehicle_color(vehicle))
+        splodge(draw, vehicle.x, vehicle.y, fill=vehicle_color(vehicle))
 
     return img
 
@@ -74,19 +88,28 @@ print("frame rate: %d fps" % fps)
 print("clip length: %d seconds" % clip_length)
 
 while True:
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_secret)
+    api = tweepy.API(auth)
+
     img = Image.new("RGB", (image_size, image_size), "black")
     frames = []
 
     while len(frames) < clip_length * fps:
-        response_json = urllib.request.urlopen(url).read().decode("utf-8-sig")
-        img = create_image(img, response_json)
-        frames.append(img.copy())
-        time.sleep(capture_delay)
+        try:
+            response_json = urllib.request.urlopen(url).read().decode("utf-8-sig")
+            img = create_image(img, response_json)
+            frames.append(img.copy())
+            print(".", end="", flush=True)
+            time.sleep(capture_delay)
+        except:
+            print("E", end="", flush=True)
 
     filename = "%s.gif" % datetime.now().isoformat().replace(":",".")
     print("saving %s" % filename)
     frames[0].save('./%s' % filename,
         save_all=True,
         append_images=frames[1:],
-        duration=int(1000 * (1 / fps)),
+        duration=int(1000 * (1.0 / fps)),
         loop=0)
+    api.update_with_media('./%s' % filename)
