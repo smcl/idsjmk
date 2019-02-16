@@ -1,115 +1,70 @@
 from datetime import datetime
-import json
-import math
-import os
-import time
-import tweepy
-import urllib.request
-from PIL import Image, ImageDraw, ImageEnhance
+from video_tweet import VideoTweet
+from vehicle import Vehicle
+from gif_creator import GifCreator
+from idsjmk_client import IdsJmkClient
+from config import Config
+import click
 
-image_size = 600
-consumer_key = ""
-consumer_secret = ""
-access_token = ""
-access_secret = ""
 
-class Vehicle(object):  
-    def __init__(self, vehicle_json):
-        self.Lat = 0
-        self.Lng = 0
-        self.__dict__ = vehicle_json
-        self._calc_vehicle_xy()
+def send_tweet(filename):
+    tweet = VideoTweet(filename)
+    tweet.upload_init()
+    tweet.upload_append()
+    tweet.upload_finalize()
+    timestamp = "{0:%Y}-{0:%m}-{0:%d} {0:%H}:{0:%M}".format(datetime.now())
+    tweet.tweet("The last hour of DPMB traffic as at %s" % timestamp)
 
-    def _calc_vehicle_xy(self):
-        # arbitrary calculation of the city limits (based on the terminal tram stops)
-        lat_max = 49.246998
-        lat_min = 49.13773
-        lng_max = 16.692684
-        lng_min = 16.507967
 
-        lat_difference = lat_max - lat_min
-        lng_difference = lng_max - lng_min
-
-        self.x = int(image_size * (self.Lat - lat_min) / lat_difference)
-        self.y = image_size - int(image_size * (self.Lng - lng_min) / lng_difference)
-
-def parse_response(response_str):
-    response_json = json.loads(response_str)
-    vehicles = [ Vehicle(v) for v in response_json["Vehicles"] ]
-    return vehicles
-
-def vehicle_color(vehicle):
-    if vehicle.Delay < 0:
-        return "#70a6ff"
-    elif vehicle.Delay > 5:
-        return "#ff0000"
-
-    delay_colors = [
-        "#ffffff", # 0 seconds
-        "#ffdd00", # 1 second        
-        "#ffbb00", # 2 seconds
-        "#ff7700", # 3 seconds
-        "#ff4400", # 4 seconds
-        "#ff0000"  # 5 seconds
-    ]
-    
-    return delay_colors[vehicle.Delay]
-
-def splodge(draw, x, y, eX=3, eY=3, fill="white"):
-    bbox =  (
-        x - eX/2, 
-        y - eY/2, 
-        x + eX/2, 
-        y + eY/2
+@click.command()
+@click.option("--image-size", default=450, help="Width + height of generated GIF")
+@click.option("--clip-length", default=10, help="Length of generated GIF (in seconds)")
+@click.option("--fps", default=30, help="Frame rate of generated GIF")
+@click.option(
+    "--capture-delay",
+    default=12,
+    help="Time in seconds between each snapshot (i.e. 12 = we will produce a GIF frame every 12 seconds)",
+)
+@click.option("--once", default=False, help="Only produce a single capture")
+def bot(image_size, clip_length, fps, capture_delay, once):
+    """Create an animated GIF showing the positions of IDS JMK buses, trolleys and trams over time."""
+    config = Config(
+        image_size=image_size,
+        clip_length=clip_length,
+        frames_per_second=fps,
+        time_between_captures=capture_delay,
+        # hard-code the boundaries we want to set on the map - this is roughly
+        # a bounding box of all the tram stations. buses go out quite far ...
+        lat_max=49.246998,
+        lat_min=49.13773,
+        lng_max=16.692684,
+        lng_min=16.507967,
+        font="/usr/share/fonts/mononoki-Regular.ttf",
     )
-    draw.ellipse(bbox, fill=fill)
 
-def create_image(base_img, response_json):
-    vehicles = parse_response(response_json)
+    print("capturing rate: every %d seconds" % config.time_between_captures)
+    print("frame rate: %d fps" % config.frames_per_second)
+    print("clip length: %d seconds" % config.clip_length)
 
-    # simulate a sort of motion by taking previous image, dimming it 80% before 
-    # adding new positions
-    img = ImageEnhance.Brightness(base_img).enhance(0.8)
-    draw = ImageDraw.Draw(img)
+    while True:
+        gif = GifCreator(config)
+        client = IdsJmkClient(config)
 
-    # fill in vehicle colours based on how delayed they are
-    for vehicle in vehicles:
-        splodge(draw, vehicle.x, vehicle.y, fill=vehicle_color(vehicle))
+        for vehicles in client.begin():
+            output = "."
+            try:
+                gif.add_frame(vehicles)
+            except:
+                output = "!"
+            print(output, end="", flush=True)
 
-    return img
+        gif_filename = gif.render()
+        print(gif_filename)
+        send_tweet(gif_filename)
 
-url = "https://mapa.idsjmk.cz/api/vehicles.json"
-capture_delay = 12
-fps = 30
-clip_length = 10
+        if once:
+            break
 
-print("capturing rate: every %d seconds" % capture_delay)
-print("frame rate: %d fps" % fps)
-print("clip length: %d seconds" % clip_length)
 
-while True:
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_secret)
-    api = tweepy.API(auth)
-
-    img = Image.new("RGB", (image_size, image_size), "black")
-    frames = []
-
-    while len(frames) < clip_length * fps:
-        try:
-            response_json = urllib.request.urlopen(url).read().decode("utf-8-sig")
-            img = create_image(img, response_json)
-            frames.append(img.copy())
-            print(".", end="", flush=True)
-            time.sleep(capture_delay)
-        except:
-            print("E", end="", flush=True)
-
-    filename = "%s.gif" % datetime.now().isoformat().replace(":",".")
-    print("saving %s" % filename)
-    frames[0].save('./%s' % filename,
-        save_all=True,
-        append_images=frames[1:],
-        duration=int(1000 * (1.0 / fps)),
-        loop=0)
-    api.update_with_media('./%s' % filename)
+if __name__ == "__main__":
+    bot()
