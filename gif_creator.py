@@ -32,12 +32,7 @@ class GifCreator:
             fill="black",
         )
         timestamp = datetime.now().isoformat()
-        draw.text(
-            (timestamp_x, timestamp_y),
-            timestamp,
-            font=self.font,
-            fill=(255, 255, 255, 128),
-        )
+        draw.text((timestamp_x, timestamp_y), timestamp, font=self.font, fill="white")
 
         return img
 

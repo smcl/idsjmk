@@ -21,7 +21,7 @@ class Vehicle(object):
             "#ffbb00",  # 2 seconds
             "#ff7700",  # 3 seconds
             "#ff4400",  # 4 seconds
-            "#ff0000",  # 5 seconds
+            "#ff8800",  # 5 seconds
         ]
 
         return delay_colors[self.Delay]

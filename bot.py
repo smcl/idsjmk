@@ -5,6 +5,7 @@ from gif_creator import GifCreator
 from idsjmk_client import IdsJmkClient
 from config import Config
 import click
+import logging
 
 
 def send_tweet(filename):
@@ -25,9 +26,10 @@ def send_tweet(filename):
     default=12,
     help="Time in seconds between each snapshot (i.e. 12 = we will produce a GIF frame every 12 seconds)",
 )
-@click.option("--once", default=False, help="Only produce a single capture")
-def bot(image_size, clip_length, fps, capture_delay, once):
-    """Create an animated GIF showing the positions of IDS JMK buses, trolleys and trams over time."""
+@click.option("--once", is_flag=True, help="Only produce a single capture")
+@click.option("--verbose", is_flag=True, help="Verbose program output")
+def bot(image_size, clip_length, fps, capture_delay, once, verbose):
+    """Create an animated GIF showing the positions of IDS JMK buses, trolleys and trams over time. The default configuration results in a 10 second, 30fps gif that represents an hour of data"""
     config = Config(
         image_size=image_size,
         clip_length=clip_length,
@@ -41,6 +43,8 @@ def bot(image_size, clip_length, fps, capture_delay, once):
         lng_min=16.507967,
         font="/usr/share/fonts/mononoki-Regular.ttf",
     )
+
+    logging.basicConfig(level=logging.INFO if verbose else logging.ERROR)
 
     print("capturing rate: every %d seconds" % config.time_between_captures)
     print("frame rate: %d fps" % config.frames_per_second)
@@ -57,9 +61,11 @@ def bot(image_size, clip_length, fps, capture_delay, once):
             except:
                 output = "!"
             print(output, end="", flush=True)
+            break
 
         gif_filename = gif.render()
         print(gif_filename)
+        break
         send_tweet(gif_filename)
 
         if once:
@@ -67,4 +73,5 @@ def bot(image_size, clip_length, fps, capture_delay, once):
 
 
 if __name__ == "__main__":
+    # pylint: disable=no-value-for-parameter
     bot()
