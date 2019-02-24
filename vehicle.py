@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-
-
 class Vehicle(object):
     def __init__(self, vehicle_json, config):
         self.Lat = 0
