@@ -61,11 +61,9 @@ def bot(image_size, clip_length, fps, capture_delay, once, verbose):
             except:
                 output = "!"
             print(output, end="", flush=True)
-            break
 
         gif_filename = gif.render()
         print(gif_filename)
-        break
         send_tweet(gif_filename)
 
         if once:
